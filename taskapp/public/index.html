@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Taskboard</title>
+<style>
+:root{--bg:#f3f5f4;--ink:#1c2b2d;--muted:#667579;--line:#d8dfdd;--card:#fff;--brand:#0f766e;--high:#c2410c;--med:#a16207;--low:#4d7c0f}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1a1b;--ink:#e6efee;--muted:#8fa3a6;--line:#263638;--card:#162425;--brand:#2dd4bf;--high:#fb923c;--med:#facc15;--low:#a3e635}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
+button,input,select,textarea{font:inherit;color:inherit}
+input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+.btn{background:var(--brand);color:#fff;border:0;border-radius:8px;padding:10px 18px;font-weight:600;cursor:pointer}
+@media (prefers-color-scheme:dark){.btn{color:#042f2e}}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.sm{padding:5px 10px;font-size:.85rem}
+.hidden{display:none!important}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px 48px}
+header{display:flex;justify-content:space-between;align-items:center;padding:20px 0;gap:12px}
+header h1{margin:0;font-size:1.4rem}
+#live{font-size:.8rem;color:var(--muted)}
+#live::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px}
+#live.on::before{background:#22c55e}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px}
+#auth{max-width:380px;margin:12vh auto 0}
+#auth form,#task-form{display:grid;gap:12px}
+label{display:grid;gap:4px;font-weight:600;font-size:.9rem}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tabs{display:flex;gap:8px;margin-bottom:16px}
+.tabs button{flex:1}
+.msg{min-height:1.4em;color:var(--high);font-size:.9rem}
+.filters{display:flex;gap:6px;overflow-x:auto;margin:20px 0 12px}
+.filters button{white-space:nowrap}
+.filters [aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+ul{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.task{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;background:var(--card);border:1px solid var(--line);border-left-width:5px;border-radius:10px;padding:14px}
+.task.high{border-left-color:var(--high)}.task.medium{border-left-color:var(--med)}.task.low{border-left-color:var(--low)}
+.task input[type=checkbox]{width:20px;height:20px;margin-top:3px}
+.task.done .t{text-decoration:line-through;color:var(--muted)}
+.t{font-weight:600;overflow-wrap:anywhere}
+.d{color:var(--muted);font-size:.9rem;overflow-wrap:anywhere}
+.meta{font-size:.8rem;color:var(--muted);margin-top:4px}
+.meta .over{color:var(--high);font-weight:600}
+.acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.empty{text-align:center;color:var(--muted);padding:32px 0}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);width:min(480px,92vw);padding:20px}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+@media(max-width:520px){.task{grid-template-columns:auto 1fr}.acts{grid-column:2;justify-content:flex-start}.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main class="wrap">
+
+<section id="auth" class="panel hidden">
+  <h1 style="margin-top:0">Taskboard</h1>
+  <div class="tabs">
+    <button class="btn" id="tab-login" type="button">Log in</button>
+    <button class="btn ghost" id="tab-register" type="button">Create account</button>
+  </div>
+  <form id="auth-form">
+    <label id="name-wrap" class="hidden">Name <input name="name" autocomplete="name"></label>
+    <label>Email <input name="email" type="email" required autocomplete="email"></label>
+    <label>Password <input name="password" type="password" required minlength="8" autocomplete="current-password"></label>
+    <button class="btn" id="auth-submit">Log in</button>
+    <div class="msg" id="auth-msg" role="alert"></div>
+  </form>
+</section>
+
+<section id="app" class="hidden">
+  <header>
+    <div><h1>Hi, <span id="user-name"></span></h1><span id="live">Connecting…</span></div>
+    <div><button class="btn" id="new-btn">New task</button> <button class="btn ghost" id="logout">Log out</button></div>
+  </header>
+  <div class="filters" id="filters" role="group" aria-label="Filter tasks"></div>
+  <ul id="list" aria-live="polite"></ul>
+</section>
+
+<dialog id="dlg">
+  <form id="task-form">
+    <h2 id="dlg-title" style="margin:0">New task</h2>
+    <label>Title <input name="title" required maxlength="200"></label>
+    <label>Details <textarea name="description" rows="3" maxlength="2000"></textarea></label>
+    <div class="row">
+      <label>Priority <select name="priority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label>
+      <label>Status <select name="status"><option value="todo">To do</option><option value="in-progress">In progress</option><option value="done">Done</option></select></label>
+    </div>
+    <label>Due date <input name="dueDate" type="date"></label>
+    <div class="msg" id="task-msg" role="alert"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn ghost" type="button" id="cancel">Cancel</button>
+      <button class="btn">Save task</button>
+    </div>
+  </form>
+</dialog>
+</main>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const STATUS = { todo: 'To do', 'in-progress': 'In progress', done: 'Done' };
+let token = localStorage.getItem('token'), tasks = [], filter = 'all', editingId = null, socket, mode = 'login';
+
+async function api(path, method = 'GET', body) {
+  const r = await fetch('/api' + path, { method, headers: { 'Content-Type': 'application/json', ...(token && { Authorization: 'Bearer ' + token }) }, body: body && JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401 && token) { logout(); }
+  if (!r.ok) throw new Error(data.error || 'Something went wrong.');
+  return data;
+}
+
+// ----- auth -----
+function setMode(m) {
+  mode = m;
+  $('#name-wrap').classList.toggle('hidden', m === 'login');
+  $('#tab-login').className = 'btn' + (m === 'login' ? '' : ' ghost');
+  $('#tab-register').className = 'btn' + (m === 'register' ? '' : ' ghost');
+  $('#auth-submit').textContent = m === 'login' ? 'Log in' : 'Create account';
+  $('#auth-msg').textContent = '';
+}
+$('#tab-login').onclick = () => setMode('login');
+$('#tab-register').onclick = () => setMode('register');
+
+$('#auth-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  try {
+    const d = await api('/auth/' + mode, 'POST', Object.fromEntries(new FormData(e.target)));
+    token = d.token; localStorage.setItem('token', token); e.target.reset(); start(d.user);
+  } catch (err) { $('#auth-msg').textContent = err.message; }
+});
+
+function logout() {
+  token = null; localStorage.removeItem('token'); tasks = [];
+  if (socket) socket.disconnect();
+  $('#app').classList.add('hidden'); $('#auth').classList.remove('hidden');
+}
+$('#logout').onclick = logout;
+
+async function start(user) {
+  $('#auth').classList.add('hidden'); $('#app').classList.remove('hidden');
+  $('#user-name').textContent = user.name;
+  tasks = await api('/tasks'); render();
+  socket = io({ auth: { token } });
+  socket.on('connect', () => { $('#live').textContent = 'Live'; $('#live').classList.add('on'); });
+  socket.on('disconnect', () => { $('#live').textContent = 'Offline'; $('#live').classList.remove('on'); });
+  socket.on('task:saved', t => { const i = tasks.findIndex(x => x._id === t._id); i < 0 ? tasks.unshift(t) : tasks[i] = t; render(); });
+  socket.on('task:deleted', ({ _id }) => { tasks = tasks.filter(x => x._id !== _id); render(); });
+}
+
+// ----- rendering -----
+function render() {
+  const counts = { all: tasks.length, ...Object.fromEntries(Object.keys(STATUS).map(s => [s, tasks.filter(t => t.status === s).length])) };
+  $('#filters').innerHTML = [['all', 'All'], ...Object.entries(STATUS)].map(([k, v]) =>
+    `<button class="btn ghost sm" data-f="${k}" aria-pressed="${filter === k}">${v} (${counts[k]})</button>`).join('');
+  const list = filter === 'all' ? tasks : tasks.filter(t => t.status === filter);
+  $('#list').innerHTML = list.length ? list.map(t => {
+    const due = t.dueDate ? new Date(t.dueDate) : null;
+    const over = due && t.status !== 'done' && due < new Date(new Date().toDateString());
+    return `<li class="task ${esc(t.priority)} ${t.status === 'done' ? 'done' : ''}">
+      <input type="checkbox" data-id="${t._id}" data-act="toggle" ${t.status === 'done' ? 'checked' : ''} aria-label="Mark ${esc(t.title)} done">
+      <div><div class="t">${esc(t.title)}</div>${t.description ? `<div class="d">${esc(t.description)}</div>` : ''}
+        <div class="meta">${STATUS[t.status]} · ${esc(t.priority)} priority${due ? ` · <span class="${over ? 'over' : ''}">${over ? 'Overdue: ' : 'Due '}${due.toLocaleDateString(undefined, { timeZone: 'UTC' })}</span>` : ''}</div></div>
+      <div class="acts"><button class="btn ghost sm" data-id="${t._id}" data-act="edit">Edit</button><button class="btn ghost sm" data-id="${t._id}" data-act="delete">Delete</button></div>
+    </li>`;
+  }).join('') : '<li class="empty">No tasks here yet. Select "New task" to add one.</li>';
+}
+$('#filters').onclick = e => { const b = e.target.closest('[data-f]'); if (b) { filter = b.dataset.f; render(); } };
+
+$('#list').addEventListener('click', async e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const t = tasks.find(x => x._id === el.dataset.id); if (!t) return;
+  try {
+    if (el.dataset.act === 'edit') openDialog(t);
+    if (el.dataset.act === 'delete' && confirm(`Delete "${t.title}"?`)) await api('/tasks/' + t._id, 'DELETE');
+  } catch (err) { alert(err.message); }
+});
+$('#list').addEventListener('change', async e => {
+  if (e.target.dataset.act !== 'toggle') return;
+  try { await api('/tasks/' + e.target.dataset.id, 'PUT', { status: e.target.checked ? 'done' : 'todo' }); }
+  catch (err) { alert(err.message); render(); }
+});
+
+// ----- create / edit dialog -----
+const dlg = $('#dlg'), form = $('#task-form');
+function openDialog(t) {
+  editingId = t?._id || null; form.reset(); $('#task-msg').textContent = '';
+  $('#dlg-title').textContent = t ? 'Edit task' : 'New task';
+  if (t) { for (const k of ['title', 'description', 'priority', 'status']) form[k].value = t[k] || ''; form.dueDate.value = t.dueDate ? t.dueDate.slice(0, 10) : ''; }
+  dlg.showModal();
+}
+$('#new-btn').onclick = () => openDialog();
+$('#cancel').onclick = () => dlg.close();
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  try {
+    const body = Object.fromEntries(new FormData(form));
+    await (editingId ? api('/tasks/' + editingId, 'PUT', body) : api('/tasks', 'POST', body));
+    dlg.close();
+  } catch (err) { $('#task-msg').textContent = err.message; }
+});
+
+// ----- boot -----
+(async () => {
+  if (token) { try { return start(await api('/auth/me')); } catch {} }
+  $('#auth').classList.remove('hidden');
+})();
+</script>
+</body>
+</html>
